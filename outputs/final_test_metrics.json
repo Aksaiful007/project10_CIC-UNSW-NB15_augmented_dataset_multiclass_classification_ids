@@ -1,0 +1,11 @@
+{
+    "Model": "Tuned Balanced Random Forest",
+    "Accuracy": 0.9045029153804695,
+    "Macro Precision": 0.6196765818657055,
+    "Macro Recall": 0.6780334195719216,
+    "Macro F1": 0.6337614898034936,
+    "Weighted F1": 0.9085245432055443,
+    "Training Time (s)": 154.95415474300012,
+    "Prediction Time (s)": 1.8414189019999867,
+    "Test Samples": 61227
+}
