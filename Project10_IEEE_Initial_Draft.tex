@@ -1,0 +1,210 @@
+\documentclass[conference]{IEEEtran}
+
+% Initial IEEE-style draft. Verify references and dataset provenance before submission.
+\usepackage{cite}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{array}
+
+\title{Imbalance-Aware Multiclass Network Intrusion Detection Using Machine Learning}
+
+\author{
+\IEEEauthorblockN{Ali Kaisar Saiful}
+\IEEEauthorblockA{
+Department of Computer Science and Engineering\\
+State University of Bangladesh\\
+Bangladesh
+}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Network intrusion detection is a multiclass classification problem in which benign traffic and attack categories may occur at substantially different frequencies. This imbalance can make accuracy alone an inadequate measure of detection performance. This paper presents an initial experimental study of machine-learning methods for multiclass network intrusion detection using an augmented CIC-UNSW-NB15 dataset. The workflow examines data quality and class distribution, groups identical feature vectors when constructing data partitions, compares baseline and imbalance-aware models, and selects a tuned Balanced Random Forest using development-set macro F1. On a held-out test partition of 61,227 records, the selected model achieves 90.45\% accuracy, 0.6780 macro recall, 0.6338 macro F1, and 0.9085 weighted F1. Results vary considerably across classes: benign traffic is classified strongly, while DoS and Shellcode remain challenging. The findings demonstrate the importance of class-wise evaluation under severe imbalance. The dataset provenance and intermediate row-count discrepancy must be reconciled, and the results should be interpreted as dataset-specific rather than evidence of deployment-level generalization.
+\end{abstract}
+
+\begin{IEEEkeywords}
+network intrusion detection, multiclass classification, class imbalance, Random Forest, macro F1, CIC-UNSW-NB15
+\end{IEEEkeywords}
+
+\section{Introduction}
+Network intrusion detection systems (NIDS) aim to distinguish benign network activity from malicious or anomalous traffic. In practical datasets, the target classes are rarely represented equally. A classifier can therefore obtain high overall accuracy by performing well on dominant classes while failing to identify less frequent attacks. For this reason, intrusion-detection experiments should report macro-averaged metrics and class-wise results alongside accuracy and weighted metrics.
+
+This study investigates a machine-learning workflow for multiclass classification using an augmented CIC-UNSW-NB15 dataset. The target contains ten categories: Benign, Analysis, Backdoor, DoS, Exploits, Fuzzers, Generic, Reconnaissance, Shellcode, and Worms. The principal objective is to assess classification performance under class imbalance while reducing the risk that identical feature vectors appear in both training and evaluation partitions.
+
+The contributions of this initial study are:
+\begin{itemize}
+    \item a data-understanding workflow covering class distribution, duplicate records, and numerical network-flow features;
+    \item a group-aware partitioning strategy based on hashes of feature vectors;
+    \item a comparison of candidate classifiers and imbalance-aware approaches using macro-averaged metrics; and
+    \item a held-out test evaluation of the selected Tuned Balanced Random Forest, including per-class results and error analysis.
+\end{itemize}
+
+\section{Dataset and Problem Formulation}
+The modeling workflow uses 76 numerical network-flow features and a categorical target represented by integer labels. The ten target classes are mapped as shown in Table~\ref{tab:classes}. The task is to learn a mapping
+\begin{equation}
+    f: \mathbb{R}^{76} \rightarrow \{0,1,\ldots,9\},
+\end{equation}
+where each input is a network-flow feature vector and the output is one of the ten traffic classes.
+
+\begin{table}[t]
+\caption{Target-class mapping}
+\label{tab:classes}
+\centering
+\begin{tabular}{cl|cl}
+\toprule
+Label & Class & Label & Class\\
+\midrule
+0 & Benign & 5 & Fuzzers\\
+1 & Analysis & 6 & Generic\\
+2 & Backdoor & 7 & Reconnaissance\\
+3 & DoS & 8 & Shellcode\\
+4 & Exploits & 9 & Worms\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The EDA indicates severe imbalance: Benign traffic accounts for approximately 80\% of the labeled observations, while Analysis, Backdoor, and Worms are rare. This motivates evaluating macro precision, macro recall, and macro F1 in addition to accuracy and weighted F1.
+
+\subsection{Data provenance note}
+The modeling-stage records report 306,173 rows after exact duplicate removal, including 76 predictors and one label. However, an earlier EDA README records different intermediate row counts and a mismatch between the source feature and label files. These counts must be reconciled against the exact dataset version and merge procedure before this draft is submitted. The final manuscript must cite the actual dataset source and version; this draft does not invent a dataset citation.
+
+\section{Data Preparation and Evaluation Protocol}
+The modeling workflow checks missing and infinite values and reports none remaining in the modeling dataset. Exact duplicate rows are removed. A further 571 identical feature vectors associated with different labels are retained rather than arbitrarily relabeled.
+
+To reduce overlap of repeated feature representations across partitions, a hash of each feature vector is used as a group identifier. A \texttt{StratifiedGroupKFold} strategy with five folds and random seed 42 is used to construct the final train/test partition. The reported test partition contains 61,227 records, and the modeling workflow reports no feature-group overlap between training and test sets. The model-development subset and grouped validation data are used for model selection; the held-out test set is reserved for final evaluation.
+
+A numeric preprocessing pipeline uses median imputation. Scaling is applied to models that require it, such as Logistic Regression, but is not applied to tree-based estimators. The final selected pipeline is refitted on the complete training partition before its one-time test evaluation.
+
+\subsection{Evaluation metrics}
+Accuracy is the fraction of correctly classified records. Macro precision, recall, and F1 are computed by calculating the respective metric independently for each class and taking the unweighted mean. Weighted F1 averages class F1 scores weighted by class support. Macro F1 is the principal model-selection metric because it gives equal weight to each class:
+\begin{equation}
+    F_{1,\mathrm{macro}} = \frac{1}{K}\sum_{k=1}^{K} F_{1,k},
+\end{equation}
+where $K=10$ and $F_{1,k}$ is the F1 score for class $k$.
+
+\section{Models and Model Selection}
+The notebook includes baseline Logistic Regression, Decision Tree, Random Forest, and HistGradientBoosting models, along with class-weighted and boosted-tree experiments. Candidate models are compared on development data. Grouped cross-validation and randomized search are used for selected tree-based models.
+
+The tuned Balanced Random Forest is selected as the leading candidate because it has the highest macro F1 among the reported development-validation comparisons. Weighted XGBoost achieves higher macro recall but lower macro F1, while tuned unweighted XGBoost achieves higher accuracy but lower macro recall and macro F1. The model choice therefore reflects the priority given to balanced performance across classes rather than accuracy alone.
+
+\begin{table}[t]
+\caption{Development-validation comparison}
+\label{tab:validation}
+\centering
+\footnotesize
+\begin{tabular}{lrrrrr}
+\toprule
+Model & Acc. & M. Prec. & M. Rec. & M. F1 & W. F1\\
+\midrule
+Tuned Balanced RF & 0.8991 & 0.5992 & 0.6431 & \textbf{0.6059} & 0.9033\\
+Weighted XGBoost & 0.8890 & 0.5089 & \textbf{0.6703} & 0.5519 & 0.8980\\
+Tuned XGBoost & \textbf{0.9087} & \textbf{0.6952} & 0.4960 & 0.5458 & \textbf{0.9068}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Results}
+Table~\ref{tab:testmetrics} summarizes the final test evaluation of the Tuned Balanced Random Forest. The model reaches 0.9045 accuracy and 0.6338 macro F1. The difference between macro F1 and weighted F1 indicates that performance is not uniform across target classes.
+
+\begin{table}[t]
+\caption{Final test-set performance}
+\label{tab:testmetrics}
+\centering
+\begin{tabular}{lr}
+\toprule
+Metric & Result\\
+\midrule
+Accuracy & 0.904503\\
+Macro Precision & 0.619677\\
+Macro Recall & 0.678033\\
+Macro F1 & \textbf{0.633761}\\
+Weighted F1 & 0.908525\\
+Training time (s) & 148.66\\
+Prediction time (s) & 1.76\\
+Test records & 61,227\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\caption{Per-class final test results}
+\label{tab:perclass}
+\centering
+\footnotesize
+\begin{tabular}{lrrrr}
+\toprule
+Class & Precision & Recall & F1 & Support\\
+\midrule
+Benign & 0.9987 & 0.9675 & 0.9829 & 44953\\
+Analysis & 0.3418 & 0.7976 & 0.4786 & 84\\
+Backdoor & 0.6905 & 0.5979 & 0.6409 & 97\\
+DoS & 0.5847 & 0.4074 & 0.4802 & 864\\
+Exploits & 0.8536 & 0.7171 & 0.7794 & 6197\\
+Fuzzers & 0.6151 & 0.8424 & 0.7111 & 5337\\
+Generic & 0.7792 & 0.8090 & 0.7938 & 890\\
+Reconnaissance & 0.5504 & 0.6563 & 0.5987 & 2389\\
+Shellcode & 0.3487 & 0.4240 & 0.3827 & 375\\
+Worms & 0.4340 & 0.5610 & 0.4894 & 41\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Class-wise interpretation}
+Benign traffic is classified with an F1 score of 0.9829. Generic and Exploits also show comparatively strong F1 scores of 0.7938 and 0.7794, respectively. Fuzzers recall is 0.8424, although its precision is lower at 0.6151, indicating that some other traffic categories are predicted as Fuzzers.
+
+DoS and Shellcode remain difficult classes, with recall values of 0.4074 and 0.4240. Analysis has relatively high recall (0.7976) but low precision (0.3418), indicating a substantial number of false-positive Analysis predictions. Worms has only 41 test examples, so its reported metrics are uncertain and sensitive to a small number of cases.
+
+\subsection{Error patterns}
+The normalized confusion matrix indicates that several attack categories are confused with Fuzzers and Exploits. This suggests overlapping feature patterns among some categories, although a feature-level investigation would be required to establish the causes. The model's high overall accuracy should therefore not be interpreted as uniformly strong attack detection.
+
+% Optional: export the final confusion matrix from the notebook and place it at
+% figures/final_test_confusion_matrix.png, then uncomment the following figure.
+% \begin{figure}[t]
+% \centering
+% \includegraphics[width=\columnwidth]{figures/final_test_confusion_matrix.png}
+% \caption{Normalized confusion matrix for the final test evaluation.}
+% \label{fig:confusion}
+% \end{figure}
+
+\section{Discussion}
+The final results support the use of class-sensitive evaluation for imbalanced multiclass intrusion detection. The selected model provides strong performance on the majority Benign class and reasonable results for several common attack classes, but minority-class performance remains uneven. Weighted XGBoost illustrates a different trade-off: it obtains higher macro recall on the development validation split, but its macro F1 is lower than that of the selected Balanced Random Forest.
+
+The test metrics are specific to the evaluated dataset and split. They do not establish performance on other networks, collection periods, or unseen attack families. Furthermore, rare-class supports are small, making estimates for Analysis, Backdoor, and especially Worms less stable. A future study could examine calibrated probabilities, feature attribution, temporal or source-separated validation, and evaluation on an independently collected dataset. Such work should be conducted without further tuning on the current held-out test set.
+
+\section{Limitations and Reproducibility}
+Several limitations should be addressed before submission:
+\begin{itemize}
+    \item The discrepancy between earlier EDA row counts and the modeling-stage dataset counts must be resolved and documented.
+    \item The exact augmented dataset source, version, license, and citation must be added.
+    \item The final hyperparameters, software versions, and computing environment should be recorded from the executed notebook.
+    \item Class-wise metrics for rare classes should be interpreted with their support counts.
+    \item The current results do not include external validation on a separate network or dataset.
+\end{itemize}
+The final fitted pipeline, predictions, metrics, and notebook should be preserved to support reproducibility.
+
+\section{Conclusion}
+This paper presented an initial study of imbalance-aware multiclass network intrusion detection using numerical network-flow features. A group-aware data partition was used to reduce the chance that identical feature vectors appeared in both training and test data. The Tuned Balanced Random Forest achieved 90.45\% test accuracy, 0.6780 macro recall, and 0.6338 macro F1 on 61,227 test records. Strong majority-class performance coexists with weaker DoS and Shellcode detection, emphasizing the need for class-wise evaluation. Before publication, the dataset provenance and row-count discrepancy must be reconciled, relevant literature and dataset references must be verified, and the experimental environment and final hyperparameters must be fully documented.
+
+\section*{Acknowledgment}
+The author acknowledges the maintainers of the dataset and the open-source machine-learning ecosystem. Specific dataset creators and any funding or institutional support should be acknowledged here where appropriate.
+
+\begin{thebibliography}{00}
+\bibitem{dataset}
+% TODO: Replace with the verified citation for the exact augmented CIC-UNSW-NB15 dataset version.
+Dataset citation to be completed: authors, dataset title, repository or publisher, version, year, and DOI/URL.
+
+\bibitem{sklearn}
+% TODO: Verify and complete the exact reference/version used in the project.
+Scikit-learn documentation or software citation to be completed.
+
+\bibitem{imbalance}
+% TODO: Add verified peer-reviewed references on class imbalance and evaluation for intrusion detection.
+Relevant literature on imbalanced learning and network intrusion detection to be added.
+\end{thebibliography}
+
+\end{document}
